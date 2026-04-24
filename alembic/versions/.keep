@@ -1,0 +1,3 @@
+# Alembic versions live here. Generate the first revision with:
+#
+#   alembic revision --autogenerate -m "initial schema"
