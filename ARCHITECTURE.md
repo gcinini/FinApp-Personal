@@ -229,3 +229,124 @@ Run them with:
 - **Enums in DB columns.** Stored as their string `.value`; access via `.value` in DTO conversion.
 - **UI strings are pt-BR** (i18n is planned but not wired).
 - **Dark theme** is the only theme today; controlled by `gui/app.py:_DARK_STYLESHEET`.
+
+
+---
+
+## 8. What happens when you type `finapp`
+
+Step-by-step trace of `finapp` (with no arguments) from terminal to help screen.
+
+### 8.1 The shell finds the executable
+
+When you ran `pip install -e .`, pip read these entries from `pyproject.toml`:
+
+```toml
+[project.scripts]
+finapp     = "finapp.cli:app"
+finapp-gui = "finapp.gui.app:main"
+```
+
+That created two tiny launcher executables in your venv:
+
+- `.venv\Scripts\finapp.exe`
+- `.venv\Scripts\finapp-gui.exe`
+
+When you type `finapp`, Windows resolves the name via `PATH` to `finapp.exe`. That `.exe` is essentially a ~100KB shim that boots Python and runs:
+
+```python
+from finapp.cli import app
+app()
+```
+
+### 8.2 Python imports `finapp.cli`
+
+This triggers the imports at the top of `cli.py`:
+
+- `typer`, `rich` (from venv site-packages)
+- `finapp.config.get_settings` — reads `.env` via pydantic-settings
+- `finapp.db.engine` — defines `get_engine()` / `session_scope()` (lazy — no DB hit yet)
+- `finapp.db.seed`, `finapp.logging_setup`
+- `finapp.models` — **side effect**: every model module is imported and each `Mapped[...]` column registers itself on `Base.metadata`. After this line SQLAlchemy "knows" the entire schema.
+- `finapp.services.import_service`
+
+### 8.3 The Typer app is built
+
+```python
+app        = typer.Typer(help="FinApp …", no_args_is_help=True)
+db_app     = typer.Typer(help="Database utilities")
+import_app = typer.Typer(help="Statement import utilities")
+app.add_typer(db_app,     name="db")
+app.add_typer(import_app, name="import")
+```
+
+The decorators (`@db_app.command("init")`, `@app.command("gui")`, …) attach each function to the Typer command tree. Nothing has executed yet — Typer is just building a registry of commands and their parameters.
+
+### 8.4 The root callback runs
+
+Because Typer is about to dispatch, it always runs the root callback first:
+
+```python
+@app.callback()
+def _root() -> None:
+    configure_logging(get_settings().log_level)
+```
+
+This loads settings (parses `.env` once and caches it via `get_settings()` `lru_cache`) and sets up structlog at the configured level (`INFO` by default).
+
+### 8.5 Typer sees no subcommand → shows help
+
+The decisive line is:
+
+```python
+app = typer.Typer(help="…", no_args_is_help=True)
+                            ^^^^^^^^^^^^^^^^^^^^^
+```
+
+`no_args_is_help=True` tells Typer: **if invoked with no arguments, print `--help` and exit with code 0** (instead of raising "missing command"). So you see:
+
+```
+Usage: finapp [OPTIONS] COMMAND [ARGS]...
+
+  FinApp — personal finance CLI
+
+Options:
+  --install-completion    Install completion for the current shell.
+  --show-completion       Show completion for the current shell.
+  --help                  Show this message and exit.
+
+Commands:
+  db        Database utilities
+  gui       Launch the PySide6 GUI.
+  import    Statement import utilities
+```
+
+### 8.6 To actually do something, run a subcommand
+
+| Command | What runs |
+|---------|-----------|
+| `finapp db init` | `db_init()` → imports models, calls `Base.metadata.create_all(engine)` → creates `data/finapp.sqlite` with all tables |
+| `finapp db seed` | `db_seed()` → opens a `session_scope()` and calls `seed_all(s)` (5 currencies, 14 pt-BR categories, 15 institutions) |
+| `finapp db accounts` | `db_accounts()` → queries `Account` rows and prints a rich table |
+| `finapp import file extrato.csv -a 1` | `import_file()` → opens session, calls `ImportService.import_file()` |
+| `finapp gui` | `gui()` → lazy-imports `finapp.gui.app` and calls `main()` (so PySide6 only loads when you actually need it) |
+
+### 8.7 Quick mental model
+
+```
+finapp                          (PATH → .venv\Scripts\finapp.exe)
+   │
+   ▼
+shim runs: from finapp.cli import app; app()
+   │
+   ▼
+imports cli.py → registers models on Base.metadata, builds Typer tree
+   │
+   ▼
+@app.callback() runs → loads .env, configures structlog
+   │
+   ▼
+no args → Typer prints help  (because no_args_is_help=True)
+```
+
+The whole thing takes ~200–500 ms because importing SQLAlchemy and all the model modules is the heavy part — and those happen even when you only ask for `--help`.
