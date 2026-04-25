@@ -2,7 +2,7 @@
 
 Personal finance management application — multi-currency (BRL/USD focused), local-first, with AI hooks.
 
-See [SPECIFICATION.md](./SPECIFICATION.md) for the full product specification.
+See [SPECIFICATION.md](./SPECIFICATION.md) for the full product specification, [ARCHITECTURE.md](./ARCHITECTURE.md) for a per-file tour of the codebase, and [PROJECT_STATUS.md](./PROJECT_STATUS.md) for current implementation status.
 
 ## Setup
 
@@ -33,49 +33,30 @@ finapp --help                  # CLI utilities (import, reconcile, export, etc.)
 
 ## Project layout
 
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for a complete file-by-file guide. High-level structure:
+
 ```
-agents/FinApp/
-├── SPECIFICATION.md
+FinApp-Personal/
+├── SPECIFICATION.md       # what the product should be
+├── ARCHITECTURE.md        # per-file tour of the codebase
+├── PROJECT_STATUS.md      # implementation progress
 ├── README.md
 ├── requirements.txt
 ├── pyproject.toml
 ├── .env.template
 ├── alembic.ini
 ├── alembic/
-│   ├── env.py
-│   └── versions/
+├── data/                  # default SQLite location
 ├── src/finapp/
-│   ├── __init__.py
-│   ├── __main__.py
-│   ├── config.py              # pydantic-settings
-│   ├── logging_setup.py
-│   ├── money.py               # Decimal/minor-unit helpers
-│   ├── cli.py                 # typer CLI
-│   ├── db/
-│   │   ├── base.py            # DeclarativeBase
-│   │   ├── engine.py          # engine + session factory
-│   │   └── seed.py
-│   ├── models/                # SQLAlchemy 2.x models
-│   │   ├── __init__.py
-│   │   ├── enums.py
-│   │   ├── mixins.py
-│   │   ├── institution.py
-│   │   ├── account.py
-│   │   ├── transaction.py
-│   │   ├── category.py
-│   │   ├── payee.py
-│   │   ├── tag.py
-│   │   ├── rule.py
-│   │   ├── budget.py
-│   │   ├── goal.py
-│   │   ├── currency.py
-│   │   ├── investment.py
-│   │   ├── reconciliation.py
-│   │   ├── ai.py
-│   │   └── audit.py
-│   ├── services/              # business logic (pure Python, GUI-independent)
-│   ├── integrations/          # parsers, market data, LLM providers
-│   └── gui/                   # PySide6 application
+│   ├── config.py          # pydantic-settings
+│   ├── logging_setup.py   # structlog
+│   ├── money.py           # Decimal/minor-unit helpers
+│   ├── cli.py             # typer CLI
+│   ├── db/                # engine, base, seed
+│   ├── models/            # SQLAlchemy 2.x ORM models
+│   ├── services/          # business logic + DTOs (GUI-independent)
+│   ├── integrations/      # parsers (CSV/OFX/PDF), market data, FX, LLM
+│   └── gui/               # PySide6 — app, panels/, dialogs/
 └── tests/
 ```
 
