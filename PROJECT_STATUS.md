@@ -1,6 +1,6 @@
 # FinApp — Project Status
 
-_Last updated: 2026-04-24_
+_Last updated: 2026-04-24 (PM)_
 
 This document tracks implementation progress against [SPECIFICATION.md](./SPECIFICATION.md). It complements the roadmap in §10 of the spec with concrete file-level status.
 
@@ -25,12 +25,13 @@ Legend: ✅ Done · 🟡 Partial / scaffolded · ⛔ Not started
 | Statement parsers — XLSX, QIF, OFC | ⛔ | Not started |
 | Import service | ✅ | File-hash + per-row external_id dedup; ties to `StatementImport` batch; tested |
 | Reconciliation service | 🟡 | Exact + fuzzy (rapidfuzz); **AI matching not started**; **no GUI workspace yet** |
-| Account / transaction services | 🟡 | Basic create methods; no edit/search/transfer/split/recurring yet |
+| Account / transaction services | 🟡 | Create + DTO-based query methods (list/summary/balance/recent/categories) + tx update/delete with status guards; no transfer/split/recurring yet |
+| Service DTO layer | ✅ | `services/dto.py` — frozen dataclasses (InstitutionSummary, AccountSummary, TransactionRow, CurrencyBalance, CategoryItem) keep GUI detached from ORM |
 | Market data adapter | 🟡 | `YahooMarketData` implemented; **not wired into a service** |
 | FX adapter (BCB PTAX) | 🟡 | Implemented; **no scheduled fetch / FxRate persistence service** |
 | LLM provider (Azure OpenAI) | 🟡 | Implemented; **no local-model (Ollama) provider** (per Q11.2) |
 | CLI (Typer) | ✅ | `db init`, `db seed`, `db accounts`, `import file`, `gui` |
-| GUI (PySide6) | 🟡 | Window shell with pt-BR tabs; **all panels are placeholders** |
+| GUI (PySide6) | 🟡 | Dark theme + 3 functional panels: **Dashboard** (net worth by currency, account balances, recent txns), **Contas** (institution/account tree + detail + add dialogs), **Transações** (QTableView register + filters + add dialog). Reconciliação/Portfólio/Relatórios/IA still placeholders |
 | Tests | 🟡 | 6 passing (money, account service, CSV import); coverage ≪ 80% target |
 | Backups / cloud sync | ⛔ | Not started (per Q11.3 — OneDrive/Dropbox/local folder + periodic backup) |
 | SQLCipher encryption | ⛔ | Optional dep listed; not wired into engine |
@@ -77,17 +78,19 @@ Legend: ✅ Done · 🟡 Partial / scaffolded · ⛔ Not started
 
 ## 4. Roadmap progress (spec §10)
 
-### Phase 1 — Core ledger (MVP) — **~70 %**
+### Phase 1 — Core ledger (MVP) — **~80 %**
 
 - [x] Schema + SQLAlchemy models
 - [x] Institutions, accounts, manual transactions (basic create)
 - [x] Multi-currency storage; `FxRate` table; BCB PTAX adapter
+- [x] Basic dashboard widgets (net worth by currency, account balances, recent transactions)
+- [x] Register grid in GUI (QTableView + QAbstractTableModel with status/account filters)
+- [x] Transaction edit / delete (services with reconciled/imported guards; no GUI yet)
 - [ ] **Alembic first revision generated**
 - [ ] Transfer creation/editing UX (cross-currency)
-- [ ] Transaction edit / delete / search / bulk-edit
+- [ ] Transaction search / bulk-edit (GUI)
 - [ ] Splits CRUD
-- [ ] Basic dashboard widgets (net worth, cash flow)
-- [ ] Register grid in GUI
+- [ ] Cash-flow dashboard widget
 - [ ] SQLite encryption (SQLCipher) toggle
 - [ ] Backup engine (local folder / OneDrive / Dropbox)
 
@@ -163,12 +166,21 @@ Legend: ✅ Done · 🟡 Partial / scaffolded · ⛔ Not started
 ## 6. Immediate next steps (recommended order)
 
 1. `alembic revision --autogenerate -m "initial schema"` and commit the first migration.
-2. `OllamaProvider` + provider switch in `config.py` (decision Q11.2).
-3. Backup/sync service skeleton (decision Q11.3): local folder rotation first, then OneDrive/Dropbox via their official desktop sync (we just write into the synced folder).
-4. Rule engine + auto-apply during `ImportService`.
-5. Reconciliation workspace UI (split view, accept-all).
-6. PortfolioService — positions and cost basis (Phase 3 kickoff).
-7. CI workflow (lint + test) and PyInstaller spec for Windows 11 + Linux.
+2. Wire transaction **edit/delete** into the Transações panel (services already exist).
+3. GUI smoke tests with `pytest-qt` for the three new panels.
+4. `OllamaProvider` + provider switch in `config.py` (decision Q11.2).
+5. Backup/sync service skeleton (decision Q11.3): local folder rotation first, then OneDrive/Dropbox via their official desktop sync (we just write into the synced folder).
+6. Rule engine + auto-apply during `ImportService`.
+7. Reconciliation workspace UI (split view, accept-all).
+8. PortfolioService — positions and cost basis (Phase 3 kickoff).
+9. CI workflow (lint + test) and PyInstaller spec for Windows 11 + Linux.
+
+### Recently shipped (2026-04-24)
+
+- **GUI panels (Dashboard / Contas / Transações)** — fully functional, dark theme, modular `gui/panels/` + `gui/dialogs/` structure.
+- **Service DTO layer** — frozen dataclasses; GUI never touches ORM directly (per spec §3.1).
+- **AccountService queries** — `list_institution_summaries`, `list_account_summaries`, `net_worth_by_currency` (balances computed in SQL).
+- **TransactionService queries + mutations** — `list_transactions` (account/status/date filters), `get_recent`, `list_categories`, `update` and `delete` with reconciled/imported guards.
 
 ---
 
